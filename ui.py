@@ -1,0 +1,192 @@
+"""Keyboard-only curses screens. All drawing and key handling live here."""
+
+import curses
+from datetime import date, timedelta
+from pathlib import Path
+
+import calendar as journal_calendar
+import db
+from editor import Editor
+
+
+ART = (Path(__file__).parent / "ascii" / "teacup.txt").read_text(encoding="utf-8").splitlines()
+
+
+def put(screen, y, x, value, attributes=0):
+    """Clip text so small SSH terminals do not raise curses.error."""
+    height, width = screen.getmaxyx()
+    if 0 <= y < height and 0 <= x < width - 1:
+        try:
+            screen.addnstr(y, x, value, width - x - 1, attributes)
+        except curses.error:
+            pass
+
+
+def draw_entry(screen, day, editor, editing, scroll, message):
+    screen.erase()
+    height, width = screen.getmaxyx()
+    if height < 12 or width < 32:
+        put(screen, 0, 0, "Terminal too small (need 32x12)")
+        screen.refresh()
+        return scroll
+
+    put(screen, 0, 2, day.strftime("%A, %d %B %Y"), curses.A_BOLD)
+    for row, art_line in enumerate(ART[:5], start=1):
+        put(screen, row, 2, art_line)
+    put(screen, 6, 0, "-" * (width - 1))
+    text_width = width - 4
+    rows, cursor = editor.visual_rows(text_width)
+    body_top, body_height = 7, height - 9
+    if editing:
+        scroll = max(0, min(scroll, cursor[0]))
+        if cursor[0] >= scroll + body_height:
+            scroll = cursor[0] - body_height + 1
+    else:
+        scroll = min(scroll, max(0, len(rows) - body_height))
+    for offset, line in enumerate(rows[scroll:scroll + body_height]):
+        put(screen, body_top + offset, 2, line)
+    if not editor.content and not editing:
+        put(screen, body_top, 2, "No entry yet. Press E to write.", curses.A_DIM)
+
+    if editing:
+        put(screen, height - 2, 2, "EDIT  Esc: save/close  F2: save")
+    else:
+        put(screen, height - 2, 2, "VIEW  Left/Right: day  E: edit  C: calendar")
+    hint = "Q: quit  J/K: scroll" if not editing else "Arrows: move  Enter: new line"
+    put(screen, height - 1, 2, (message + "  " if message else "") + hint)
+    try:
+        curses.curs_set(1 if editing else 0)
+        if editing:
+            screen.move(body_top + cursor[0] - scroll, 2 + cursor[1])
+    except curses.error:
+        pass
+    screen.refresh()
+    return scroll
+
+
+def draw_calendar(screen, picked, entry_days):
+    screen.erase()
+    height, width = screen.getmaxyx()
+    if height < 14 or width < 35:
+        put(screen, 0, 0, "Terminal too small (need 35x14)")
+        screen.refresh()
+        return
+    put(screen, 1, 2, picked.strftime("%B %Y"), curses.A_BOLD)
+    put(screen, 3, 2, "Mo  Tu  We  Th  Fr  Sa  Su")
+    for week_number, week in enumerate(journal_calendar.month_grid(picked.year, picked.month)):
+        for weekday, day in enumerate(week):
+            if day is None:
+                continue
+            marker = "*" if day.day in entry_days else " "
+            cell = f"{day.day:2d}{marker} "
+            attr = curses.A_REVERSE if day == picked else 0
+            put(screen, 4 + week_number, 2 + weekday * 4, cell, attr)
+    put(screen, 11, 2, "* = journal entry")
+    put(screen, height - 2, 2, "Arrows: day/week  [ ]: month  Enter: open")
+    put(screen, height - 1, 2, "Esc: cancel  Q: quit")
+    try:
+        curses.curs_set(0)
+    except curses.error:
+        pass
+    screen.refresh()
+
+
+def edit_action(key):
+    """Translate curses keys into actions understood by the pure editor."""
+    arrows = {
+        curses.KEY_LEFT: "left", curses.KEY_RIGHT: "right",
+        curses.KEY_UP: "up", curses.KEY_DOWN: "down",
+        curses.KEY_HOME: "home", curses.KEY_END: "end",
+        curses.KEY_DC: "delete", curses.KEY_BACKSPACE: "backspace",
+    }
+    if isinstance(key, int):
+        return arrows.get(key), None
+    if key in ("\n", "\r"):
+        return "enter", None
+    if key in ("\b", "\x7f"):
+        return "backspace", None
+    if key.isprintable():
+        return "insert", key
+    return None, None
+
+
+def run(screen, connection):
+    screen.keypad(True)
+    day = date.today()
+    entry = db.get_entry(connection, day)
+    editor = Editor(entry["content"] if entry else "")
+    mode, scroll, dirty, message = "view", 0, False, ""
+    picked = day
+    marked_days = set()
+
+    while True:
+        if mode == "calendar":
+            draw_calendar(screen, picked, marked_days)
+        else:
+            scroll = draw_entry(screen, day, editor, mode == "edit", scroll, message)
+        try:
+            key = screen.get_wch()
+        except curses.error:
+            continue
+
+        if key == curses.KEY_RESIZE:
+            continue
+        if mode == "edit":
+            if key in ("\x1b", curses.KEY_F2):
+                if dirty:
+                    db.save_entry(connection, day, editor.content)
+                    dirty = False
+                message = "Saved"
+                if key == "\x1b":
+                    mode = "view"
+                continue
+            action, character = edit_action(key)
+            if action:
+                dirty |= editor.handle(action, character)
+                message = "Unsaved" if dirty else ""
+            continue
+
+        if mode == "calendar":
+            if key in ("q", "Q"):
+                return
+            if key == "\x1b":
+                mode = "view"
+                continue
+            if key in ("\n", "\r", curses.KEY_ENTER):
+                day = picked
+                entry = db.get_entry(connection, day)
+                editor = Editor(entry["content"] if entry else "")
+                scroll, mode, message = 0, "view", ""
+                continue
+            if key == curses.KEY_LEFT:
+                picked -= timedelta(days=1)
+            elif key == curses.KEY_RIGHT:
+                picked += timedelta(days=1)
+            elif key == curses.KEY_UP:
+                picked -= timedelta(days=7)
+            elif key == curses.KEY_DOWN:
+                picked += timedelta(days=7)
+            elif key == "[":
+                picked = journal_calendar.change_month(picked, -1)
+            elif key == "]":
+                picked = journal_calendar.change_month(picked, 1)
+            marked_days = db.entry_days(connection, picked.year, picked.month)
+            continue
+
+        # View mode: writing starts only after E, so Q always quits here.
+        if key in ("q", "Q"):
+            return
+        if key in ("e", "E"):
+            mode, message = "edit", ""
+        elif key in ("c", "C"):
+            picked, mode = day, "calendar"
+            marked_days = db.entry_days(connection, picked.year, picked.month)
+        elif key in (curses.KEY_LEFT, curses.KEY_RIGHT):
+            day += timedelta(days=-1 if key == curses.KEY_LEFT else 1)
+            entry = db.get_entry(connection, day)
+            editor = Editor(entry["content"] if entry else "")
+            scroll, message = 0, ""
+        elif key in ("j", "J", curses.KEY_DOWN):
+            scroll += 1
+        elif key in ("k", "K", curses.KEY_UP):
+            scroll = max(0, scroll - 1)
