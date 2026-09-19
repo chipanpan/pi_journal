@@ -9,7 +9,7 @@ import db
 from editor import Editor
 
 
-ART = (Path(__file__).parent / "ascii" / "teacup.txt").read_text(encoding="utf-8").splitlines()
+ART = (Path(__file__).parent / "ascii" / "cat.txt").read_text(encoding="utf-8").splitlines()
 
 
 def put(screen, y, x, value, attributes=0):

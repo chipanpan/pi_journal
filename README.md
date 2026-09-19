@@ -1,5 +1,9 @@
 # Terminal Journal v0.1
 
+## To-do
+[] Switch language: EN, FR, VN
+[] Change illustration switch 
+
 A small, keyboard-only daily journal for Linux and Raspberry Pi terminals. It uses only Python 3's standard library: `curses` for the screen and `sqlite3` for storage. It also works in an SSH terminal.
 
 ## Run
