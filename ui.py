@@ -11,6 +11,7 @@ from editor import Editor
 
 ART = (Path(__file__).parent / "ascii" / "cat.txt").read_text(encoding="utf-8").splitlines()
 SIDE_WIDTH = 19
+CALENDAR_WIDTH = 22
 
 
 def put(screen, y, x, value, attributes=0):
@@ -39,9 +40,9 @@ def draw_entry(screen, day, editor, editing, scroll, message):
 
     hint_row = min(8, height - 5)
     hints = (
-        ("EDIT", "Esc save/close", "F2 save", "Arrows move", "Enter new line")
+        ("EDIT", "Esc save/close", "Ctrl-S save")
         if editing else
-        ("VIEW", "</> change day", "E edit", "C calendar", "Q quit  J/K scroll")
+        ("VIEW", "</> change day", "E edit", "C calendar", "Q quit")
     )
     for offset, hint in enumerate(hints):
         put(screen, hint_row + offset, 1, hint, curses.A_DIM)
@@ -73,26 +74,39 @@ def draw_entry(screen, day, editor, editing, scroll, message):
     return scroll
 
 
-def draw_calendar(screen, picked, entry_days):
+def draw_calendar(screen, picked, entry_days, preview):
     screen.erase()
     height, width = screen.getmaxyx()
-    if height < 14 or width < 35:
-        put(screen, 0, 0, "Terminal too small (need 35x14)")
+    if height < 12 or width < 38:
+        put(screen, 0, 0, "Terminal too small (need 38x12)")
         screen.refresh()
         return
-    put(screen, 1, 2, picked.strftime("%B %Y"), curses.A_BOLD)
-    put(screen, 3, 2, "Mo  Tu  We  Th  Fr  Sa  Su")
+
+    for row in range(height):
+        put(screen, row, CALENDAR_WIDTH, "|")
+
+    put(screen, 0, 1, picked.strftime("%b %Y"), curses.A_BOLD)
+    put(screen, 2, 1, "Mo Tu We Th Fr Sa Su")
     for week_number, week in enumerate(journal_calendar.month_grid(picked.year, picked.month)):
         for weekday, day in enumerate(week):
             if day is None:
                 continue
             marker = "*" if day.day in entry_days else " "
-            cell = f"{day.day:2d}{marker} "
+            cell = f"{day.day:2d}{marker}"
             attr = curses.A_REVERSE if day == picked else 0
-            put(screen, 4 + week_number, 2 + weekday * 4, cell, attr)
-    put(screen, 11, 2, "* = journal entry")
-    put(screen, height - 2, 2, "Arrows: day/week  [ ]: month  Enter: open")
-    put(screen, height - 1, 2, "Esc: cancel  Q: quit")
+            put(screen, 3 + week_number, 1 + weekday * 3, cell, attr)
+    put(screen, 9, 1, "* entry   Q quit", curses.A_DIM)
+    put(screen, 10, 1, "Arrows move Esc back", curses.A_DIM)
+    put(screen, 11, 1, "[ ] month Enter open", curses.A_DIM)
+
+    text_left = CALENDAR_WIDTH + 2
+    text_width = width - text_left - 1
+    put(screen, 0, text_left, picked.strftime("%d %b %Y"), curses.A_BOLD)
+    rows, _ = preview.visual_rows(text_width)
+    for offset, line in enumerate(rows[:height - 2]):
+        put(screen, 2 + offset, text_left, line)
+    if not preview.content:
+        put(screen, 2, text_left, "No entry.", curses.A_DIM)
     try:
         curses.curs_set(0)
     except curses.error:
@@ -130,7 +144,9 @@ def run(screen, connection):
 
     while True:
         if mode == "calendar":
-            draw_calendar(screen, picked, marked_days)
+            preview_entry = db.get_entry(connection, picked)
+            preview = Editor(preview_entry["content"] if preview_entry else "")
+            draw_calendar(screen, picked, marked_days, preview)
         else:
             scroll = draw_entry(screen, day, editor, mode == "edit", scroll, message)
         try:
@@ -141,7 +157,7 @@ def run(screen, connection):
         if key == curses.KEY_RESIZE:
             continue
         if mode == "edit":
-            if key in ("\x1b", curses.KEY_F2):
+            if key in ("\x1b", "\x13", curses.KEY_F2):
                 if dirty:
                     db.save_entry(connection, day, editor.content)
                     dirty = False

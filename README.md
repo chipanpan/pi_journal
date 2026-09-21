@@ -14,7 +14,7 @@ Install Python 3 with curses support (included in most Linux distributions), the
 python3 main.py
 ```
 
-Use a terminal at least 38 columns wide and 14 rows tall for every screen. The journal view is optimized for a roughly 40-by-13-cell LCD: art and compact navigation hints occupy the left rail while the entry uses the full height on the right. Set a UTF-8 locale if you want to type non-ASCII characters. No packages or virtual environment are needed.
+Use a terminal at least 38 columns wide and 12 rows tall. The interface is optimized for a roughly 40-by-13-cell LCD: the journal keeps its art and compact navigation hints in the left rail, and the calendar replaces that rail while previewing the selected entry on the right. Set a UTF-8 locale if you want to type non-ASCII characters. No packages or virtual environment are needed.
 
 Entries are stored at `~/.local/share/terminal-journal/journal.db`, or under `$XDG_DATA_HOME/terminal-journal/journal.db` when that variable is set. The directory and database are created on first run. Back up that file to keep your journal safe.
 
@@ -23,7 +23,7 @@ Entries are stored at `~/.local/share/terminal-journal/journal.db`, or under `$X
 | Screen | Keys |
 | --- | --- |
 | Journal | Left/Right: previous/next day; E: edit; C: calendar; J/K or Up/Down: scroll; Q: quit |
-| Editor | Type to insert; arrows, Home, End, Backspace, Delete, Enter to edit; F2: save; Esc: save and return |
+| Editor | Type to insert; arrows, Home, End, Backspace, Delete, Enter to edit; Ctrl+S: save; Esc: save and return; F2: alternate save |
 | Calendar | Arrows: move one day or week; `[` / `]`: previous/next month; Enter: open date; Esc: cancel; Q: quit |
 
 The calendar marks dates containing text with `*`. An empty entry does not receive a mark. The currently selected date is highlighted. `Q` is a normal text character while editing; press Esc, then Q to quit.
