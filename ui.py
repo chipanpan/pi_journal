@@ -10,6 +10,7 @@ from editor import Editor
 
 
 ART = (Path(__file__).parent / "ascii" / "cat.txt").read_text(encoding="utf-8").splitlines()
+SIDE_WIDTH = 19
 
 
 def put(screen, y, x, value, attributes=0):
@@ -25,18 +26,31 @@ def put(screen, y, x, value, attributes=0):
 def draw_entry(screen, day, editor, editing, scroll, message):
     screen.erase()
     height, width = screen.getmaxyx()
-    if height < 12 or width < 32:
-        put(screen, 0, 0, "Terminal too small (need 32x12)")
+    if height < 12 or width < 38:
+        put(screen, 0, 0, "Terminal too small (need 38x12)")
         screen.refresh()
         return scroll
 
-    put(screen, 0, 2, day.strftime("%A, %d %B %Y"), curses.A_BOLD)
-    for row, art_line in enumerate(ART[:5], start=1):
-        put(screen, row, 2, art_line)
-    put(screen, 6, 0, "-" * (width - 1))
-    text_width = width - 4
+    # A side rail gives the entry nearly the full screen height on short LCDs.
+    for row, art_line in enumerate(ART[:7]):
+        put(screen, row, 1, art_line)
+    for row in range(height):
+        put(screen, row, SIDE_WIDTH, "|")
+
+    hint_row = min(8, height - 5)
+    hints = (
+        ("EDIT", "Esc save/close", "F2 save", "Arrows move", "Enter new line")
+        if editing else
+        ("VIEW", "</> change day", "E edit", "C calendar", "Q quit  J/K scroll")
+    )
+    for offset, hint in enumerate(hints):
+        put(screen, hint_row + offset, 1, hint, curses.A_DIM)
+
+    text_left = SIDE_WIDTH + 2
+    text_width = width - text_left - 1
+    put(screen, 0, text_left, day.strftime("%a, %d %b %Y"), curses.A_BOLD)
     rows, cursor = editor.visual_rows(text_width)
-    body_top, body_height = 7, height - 9
+    body_top, body_height = 2, height - 2
     if editing:
         scroll = max(0, min(scroll, cursor[0]))
         if cursor[0] >= scroll + body_height:
@@ -44,20 +58,15 @@ def draw_entry(screen, day, editor, editing, scroll, message):
     else:
         scroll = min(scroll, max(0, len(rows) - body_height))
     for offset, line in enumerate(rows[scroll:scroll + body_height]):
-        put(screen, body_top + offset, 2, line)
+        put(screen, body_top + offset, text_left, line)
     if not editor.content and not editing:
-        put(screen, body_top, 2, "No entry yet. Press E to write.", curses.A_DIM)
-
-    if editing:
-        put(screen, height - 2, 2, "EDIT  Esc: save/close  F2: save")
-    else:
-        put(screen, height - 2, 2, "VIEW  Left/Right: day  E: edit  C: calendar")
-    hint = "Q: quit  J/K: scroll" if not editing else "Arrows: move  Enter: new line"
-    put(screen, height - 1, 2, (message + "  " if message else "") + hint)
+        put(screen, body_top, text_left, "No entry. Press E.", curses.A_DIM)
+    if message:
+        put(screen, 1, text_left, message, curses.A_DIM)
     try:
         curses.curs_set(1 if editing else 0)
         if editing:
-            screen.move(body_top + cursor[0] - scroll, 2 + cursor[1])
+            screen.move(body_top + cursor[0] - scroll, text_left + cursor[1])
     except curses.error:
         pass
     screen.refresh()

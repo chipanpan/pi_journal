@@ -14,7 +14,7 @@ Install Python 3 with curses support (included in most Linux distributions), the
 python3 main.py
 ```
 
-Use a terminal at least 35 columns wide and 14 rows tall for every screen. Set a UTF-8 locale if you want to type non-ASCII characters. No packages or virtual environment are needed.
+Use a terminal at least 38 columns wide and 14 rows tall for every screen. The journal view is optimized for a roughly 40-by-13-cell LCD: art and compact navigation hints occupy the left rail while the entry uses the full height on the right. Set a UTF-8 locale if you want to type non-ASCII characters. No packages or virtual environment are needed.
 
 Entries are stored at `~/.local/share/terminal-journal/journal.db`, or under `$XDG_DATA_HOME/terminal-journal/journal.db` when that variable is set. The directory and database are created on first run. Back up that file to keep your journal safe.
 

@@ -67,14 +67,48 @@ class Editor:
         return False
 
     def visual_rows(self, width):
-        """Wrap text at screen width and locate the cursor in wrapped rows."""
+        """Word-wrap text and locate the cursor in the resulting rows.
+
+        Spaces and existing hyphens are preferred as wrap points. A single word
+        wider than the pane still has to be split so every row fits on screen.
+        """
         width = max(1, width)
         rows = []
         cursor = (0, 0)
         for logical_row, line in enumerate(self.lines):
             base = len(rows)
-            # Include an empty final segment when the cursor is just past a full line.
-            rows.extend(line[start:start + width] for start in range(0, len(line) + 1, width))
+            segments = self._wrap_line(line, width)
+            rows.extend(line[start:end] for start, end in segments)
             if logical_row == self.row:
-                cursor = (base + self.col // width, self.col % width)
+                for visual_row, (start, end) in enumerate(segments):
+                    if self.col < end or visual_row == len(segments) - 1:
+                        cursor = (base + visual_row, self.col - start)
+                        break
         return rows, cursor
+
+    @staticmethod
+    def _wrap_line(line, width):
+        """Return contiguous slices, preferring breaks after spaces/hyphens."""
+        if not line:
+            return [(0, 0)]
+
+        segments = []
+        start = 0
+        while len(line) - start > width:
+            limit = start + width
+            window = line[start:limit]
+            space = max(window.rfind(" "), window.rfind("\t"))
+            hyphen = window.rfind("-")
+            break_at = max(space, hyphen)
+            if break_at >= 0:
+                end = start + break_at + 1
+            else:
+                end = limit
+            segments.append((start, end))
+            start = end
+
+        segments.append((start, len(line)))
+        if len(line) == start + width:
+            # Keep a visible cursor position after a completely full final row.
+            segments.append((len(line), len(line)))
+        return segments

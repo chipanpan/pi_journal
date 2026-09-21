@@ -42,6 +42,23 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(rows, ["ab!", "cd"])
         self.assertEqual(cursor, (1, 0))
 
+    def test_wrap_prefers_whole_words_and_hyphens(self):
+        editor = Editor("one two-three four")
+        rows, cursor = editor.visual_rows(7)
+        self.assertEqual(rows, ["one ", "two-", "three ", "four"])
+        self.assertEqual(cursor, (3, 4))
+
+        editor = Editor("a abc-def")
+        rows, cursor = editor.visual_rows(7)
+        self.assertEqual(rows, ["a abc-", "def"])
+        self.assertEqual(cursor, (1, 3))
+
+    def test_wrap_splits_only_words_wider_than_pane(self):
+        editor = Editor("abcdefgh")
+        rows, cursor = editor.visual_rows(5)
+        self.assertEqual(rows, ["abcde", "fgh"])
+        self.assertEqual(cursor, (1, 3))
+
 
 class CalendarTests(unittest.TestCase):
     def test_month_edges(self):
