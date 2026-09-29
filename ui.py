@@ -176,6 +176,7 @@ class JournalApp:
         self.root.bind("<Escape>", self.leave_fullscreen)
         self.root.bind("<F9>", lambda _event: self.toggle_sidebar())
         self.root.bind("<Control-q>", self.close)
+        self.root.bind("<Control-f>", self.toggle_favorite)
         self.root.bind("<Control-s>", self.save)
         self.root.bind("<Control-b>", lambda _event: self.format_selection("bold"))
         self.root.bind("<Control-i>", lambda _event: self.format_selection("italic"))
@@ -193,6 +194,7 @@ class JournalApp:
         self.editor.bind("<Control-h>", lambda _event: self.format_selection("highlight"))
         self.editor.bind("<Control-l>", lambda _event: self.toggle_bullets())
         self.editor.bind("<Control-q>", self.close)
+        self.editor.bind("<Control-f>", self.toggle_favorite)
         self.editor.bind("<Control-t>", self.open_today)
         self.editor.bind("<Tab>", self.accept_autocomplete)
         self.editor.bind("<Return>", self.autocomplete_return)
@@ -313,6 +315,13 @@ class JournalApp:
             self.status_label.configure(text="Saved")
             self.refresh_calendar()
             self.refresh_block_types()
+        return "break"
+
+    def toggle_favorite(self, _event=None):
+        self.save()
+        favorite = db.toggle_favorite(self.connection, self.day)
+        self.status_label.configure(text="⭑ Favorited" if favorite else "Favorite removed")
+        self.refresh_calendar()
         return "break"
 
     def on_modified(self, _event=None):
@@ -576,7 +585,9 @@ class JournalApp:
             return
         colors = THEMES[self.preferences["theme"]]
         self.month_label.configure(text=self.calendar_day.strftime("%B %Y"))
-        marked = db.entry_days(self.connection, self.calendar_day.year, self.calendar_day.month)
+        markers = db.month_markers(
+            self.connection, self.calendar_day.year, self.calendar_day.month
+        )
         for index, weekday in enumerate(self.weekday_labels):
             weekday.configure(
                 bg=colors["panel"],
@@ -590,7 +601,12 @@ class JournalApp:
             if day is None:
                 cell.configure(text="", bg=colors["bg"])
                 continue
-            marker = "•" if day.day in marked else ""
+            if markers.get(day.day):
+                marker = "⭑"
+            elif day.day in markers:
+                marker = "•"
+            else:
+                marker = ""
             cell.configure(
                 text=f"{day.day}{marker}",
                 bg=colors["select"] if day == self.day else colors["bg"],

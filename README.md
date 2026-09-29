@@ -34,6 +34,8 @@ kept beside it in `settings.json`.
   next month, or `Ctrl+T` to return to today.
 - Press `Ctrl+S` to save immediately. Changes also save automatically after a
   short pause and whenever you change dates or close the app.
+- Press `Ctrl+F` to toggle the open date as a favorite. Favorited dates use a
+  `★` calendar marker instead of the normal entry dot.
 - Press `F9` to collapse or restore the calendar sidebar.
 - Press `F7` to enter the Block types navigator, use Up/Down to move, and press
   Enter to display the selected type. Escape returns to the daily entry.

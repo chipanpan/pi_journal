@@ -93,6 +93,37 @@ def entry_days(connection, year, month):
     return {int(row["date"][-2:]) for row in rows}
 
 
+def month_markers(connection, year, month):
+    """Return ``day: is_favorite`` for visible calendar entry markers."""
+    prefix = f"{year:04d}-{month:02d}-"
+    rows = connection.execute(
+        """
+        SELECT date, favorite FROM entries
+        WHERE date LIKE ? AND (content != '' OR favorite != 0)
+        """,
+        (prefix + "%",),
+    ).fetchall()
+    return {int(row["date"][-2:]): bool(row["favorite"]) for row in rows}
+
+
+def toggle_favorite(connection, day):
+    """Toggle a date's favorite flag without changing its journal text."""
+    row = get_entry(connection, day)
+    favorite = not bool(row["favorite"]) if row else True
+    if row is None:
+        connection.execute(
+            "INSERT INTO entries (date, favorite) VALUES (?, ?)",
+            (day.isoformat(), int(favorite)),
+        )
+    else:
+        connection.execute(
+            "UPDATE entries SET favorite = ? WHERE date = ?",
+            (int(favorite), day.isoformat()),
+        )
+    connection.commit()
+    return favorite
+
+
 def all_entries(connection):
     """Return nonempty entries newest first for dynamic block filtering."""
     return connection.execute(
