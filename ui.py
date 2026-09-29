@@ -57,8 +57,16 @@ class JournalApp:
 
     def _build_window(self):
         self.root.title("Daily Journal")
-        self.root.minsize(480, 300)
-        self.root.geometry("800x480")
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        self.root.minsize(min(480, screen_width), min(300, screen_height))
+        self._set_windowed_geometry()
+
+    def _set_windowed_geometry(self):
+        """Fit the normal window on small LCDs as well as desktop screens."""
+        width = min(800, self.root.winfo_screenwidth())
+        height = min(480, self.root.winfo_screenheight())
+        self.root.geometry("{}x{}+0+0".format(width, height))
 
     def _build_styles(self):
         self.style = ttk.Style(self.root)
@@ -256,7 +264,7 @@ class JournalApp:
             else:
                 self.root.attributes("-fullscreen", False)
                 self.root.overrideredirect(False)
-                self.root.geometry("800x480")
+                self._set_windowed_geometry()
         except tk.TclError:
             enabled = False
         self.preferences["fullscreen"] = bool(enabled)
