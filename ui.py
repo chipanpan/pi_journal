@@ -243,8 +243,20 @@ class JournalApp:
         return "break"
 
     def set_fullscreen(self, enabled):
+        # ``-fullscreen`` is normally handled by the window manager.  In the
+        # lightweight Xorg-only setup used on the Pi there is no window
+        # manager, so size the undecorated window to the X screen as well.
         try:
-            self.root.attributes("-fullscreen", bool(enabled))
+            if enabled:
+                width = self.root.winfo_screenwidth()
+                height = self.root.winfo_screenheight()
+                self.root.overrideredirect(True)
+                self.root.geometry("{}x{}+0+0".format(width, height))
+                self.root.attributes("-fullscreen", True)
+            else:
+                self.root.attributes("-fullscreen", False)
+                self.root.overrideredirect(False)
+                self.root.geometry("800x480")
         except tk.TclError:
             enabled = False
         self.preferences["fullscreen"] = bool(enabled)
