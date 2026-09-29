@@ -119,7 +119,7 @@ class JournalApp:
             self.calendar_cells.append(row_cells)
 
         ttk.Separator(self.sidebar).pack(fill="x", pady=6)
-        ttk.Label(self.sidebar, text="Block types", font=self.bold_font).pack(fill="x")
+        ttk.Label(self.sidebar, text="Tags", font=self.bold_font).pack(fill="x")
         self.block_types_list = tk.Listbox(
             self.sidebar, height=5, selectmode=tk.SINGLE, exportselection=False,
             borderwidth=0, highlightthickness=0, activestyle="none",
@@ -134,8 +134,8 @@ class JournalApp:
         self.sidebar_hint = ttk.Label(
             self.sidebar,
             text=(
-                "F6 theme · F7 types · F9 sidebar\n"
-                "F11 full · Ctrl+Q quit"
+                "F6 theme · F7 tags · F9 sidebar\n"
+                "F11 fullscreen · Ctrl+Q quit"
             ),
             justify="left", font=self.small_font,
         )
@@ -352,7 +352,7 @@ class JournalApp:
         block_types = db.block_types(self.connection)
         self.block_types_list.delete(0, "end")
         for block_type in block_types:
-            self.block_types_list.insert("end", "/" + block_type)
+            self.block_types_list.insert("end", block_type)
         if self.active_block_type in block_types:
             index = block_types.index(self.active_block_type)
             self.block_types_list.selection_set(index)
@@ -406,8 +406,6 @@ class JournalApp:
         sections = []
         for entry_date, block in matches:
             heading = date.fromisoformat(entry_date).strftime("%d %b %Y")
-            if block.category is not None:
-                heading += " · " + block.category
             sections.append("— {} —\n{}".format(heading, block.content))
 
         self.active_block_type = block_type
@@ -419,7 +417,7 @@ class JournalApp:
         self.editor.edit_reset()
         self.editor.edit_modified(False)
         self.dirty = False
-        self.date_label.configure(text="/{} · {} blocks".format(block_type, len(matches)))
+        self.date_label.configure(text="{} · {} blocks".format(block_type, len(matches)))
         self.status_label.configure(text="Esc: daily entry")
         self.refresh_markup()
         self.editor.configure(state="disabled")
