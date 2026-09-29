@@ -5,7 +5,9 @@ from datetime import date
 from pathlib import Path
 
 import calendar as journal_calendar
+import categories
 import db
+import editor
 from editor import Editor
 
 
@@ -31,6 +33,12 @@ class DatabaseTests(unittest.TestCase):
 
 
 class EditorTests(unittest.TestCase):
+    def test_plain_text_formatting(self):
+        self.assertEqual(editor.formatted_text("word", "bold"), "**word**")
+        self.assertEqual(editor.toggle_bullet_lines([""]), ["- "])
+        self.assertEqual(editor.toggle_bullet_lines(["one", "two"]), ["- one", "- two"])
+        self.assertEqual(editor.toggle_bullet_lines(["- one", "- two"]), ["one", "two"])
+
     def test_edit_and_wrap(self):
         editor = Editor("ab\ncd")
         editor.handle("home")
@@ -65,6 +73,24 @@ class CalendarTests(unittest.TestCase):
         weeks = journal_calendar.month_grid(2026, 9)
         self.assertEqual(weeks[0][1], date(2026, 9, 1))
         self.assertEqual(journal_calendar.change_month(date(2026, 1, 31), 1), date(2026, 2, 28))
+
+
+class CategoryTests(unittest.TestCase):
+    def test_parses_blocks_and_tags_for_future_migration(self):
+        text = "A preface #Books\n/memory\nRead on the train #travel #books\n/todo\nPack"
+        blocks = categories.parse_blocks(text)
+        self.assertEqual([block.category for block in blocks], [None, "memory", "todo"])
+        self.assertEqual(blocks[1].content, "Read on the train #travel #books")
+        self.assertEqual(blocks[1].tags, ("travel", "books"))
+        self.assertEqual(blocks[0].tags, ("books",))
+
+    def test_only_recognized_command_lines_split_blocks(self):
+        blocks = categories.parse_blocks("/memory lane\n/unknown\n/idea\nTry it")
+        self.assertEqual(len(blocks), 2)
+        self.assertIsNone(blocks[0].category)
+        self.assertEqual(blocks[1].category, "idea")
+        self.assertEqual(categories.matching_commands("/gr"), ("/gratitude",))
+        self.assertEqual(categories.matching_commands("memory"), ())
 
 
 if __name__ == "__main__":

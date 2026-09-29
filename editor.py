@@ -1,6 +1,29 @@
 """Small, terminal-independent text editor for journal entries."""
 
 
+FORMAT_MARKERS = {"bold": "**", "italic": "*", "highlight": "=="}
+
+
+def formatted_text(text, style):
+    """Wrap selected text in the plain-text marker for ``style``."""
+    try:
+        marker = FORMAT_MARKERS[style]
+    except KeyError:
+        raise ValueError("unknown formatting style: {}".format(style))
+    return marker + text + marker
+
+
+def toggle_bullet_lines(lines):
+    """Add bullets to lines, or remove them when every nonempty line has one."""
+    if lines == [""]:
+        return ["- "]
+    remove = bool(lines) and all(not line.strip() or line.startswith("- ") for line in lines)
+    return [
+        line[2:] if remove and line.startswith("- ") else (line if remove or not line else "- " + line)
+        for line in lines
+    ]
+
+
 class Editor:
     def __init__(self, content=""):
         self.lines = content.split("\n")

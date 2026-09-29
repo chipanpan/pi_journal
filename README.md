@@ -1,43 +1,79 @@
-# Terminal Journal v0.1
+# Daily Journal MVP
 
-## To-do
-[] Switch language: EN, FR, VN
-[] Change illustration switch 
-
-A small, keyboard-only daily journal for Linux and Raspberry Pi terminals. It uses only Python 3's standard library: `curses` for the screen and `sqlite3` for storage. It also works in an SSH terminal.
+A lightweight, fullscreen daily journal for Linux and Raspberry Pi. The app uses
+only Python 3's standard library: **Tkinter** for the interface and **SQLite** for
+storage. It is designed for keyboard use on a 3.5-inch display under DietPi/XFCE.
 
 ## Run
 
-Install Python 3 with curses support (included in most Linux distributions), then from this directory run:
+On Debian, Raspberry Pi OS, or DietPi, install Python's Tk package once:
+
+```sh
+sudo apt install python3-tk
+```
+
+Then start the journal from this directory:
 
 ```sh
 python3 main.py
 ```
 
-Use a terminal at least 38 columns wide and 12 rows tall. The interface is optimized for a roughly 40-by-13-cell LCD: the journal keeps its art and compact navigation hints in the left rail, and the calendar replaces that rail while previewing the selected entry on the right. Set a UTF-8 locale if you want to type non-ASCII characters. No packages or virtual environment are needed.
+The app opens fullscreen by default. `F11` toggles fullscreen and `Escape`
+leaves it. The window can still be resized for desktop development.
 
-Entries are stored at `~/.local/share/terminal-journal/journal.db`, or under `$XDG_DATA_HOME/terminal-journal/journal.db` when that variable is set. The directory and database are created on first run. Back up that file to keep your journal safe.
+Entries are stored at `~/.local/share/terminal-journal/journal.db`, or beneath
+`$XDG_DATA_HOME/terminal-journal/` when that variable is set. This is the same
+SQLite database and one-entry-per-date schema used by v0.1. Preferences are
+kept beside it in `settings.json`.
 
-## Keys
+## Using the journal
 
-| Screen | Keys |
-| --- | --- |
-| Journal | Left/Right: previous/next day; E: edit; C: calendar; J/K or Up/Down: scroll; Q: quit |
-| Editor | Type to insert; arrows, Home, End, Backspace, Delete, Enter to edit; Ctrl+S: save; Esc: save and return; F2: alternate save |
-| Calendar | Arrows: move one day or week; `[` / `]`: previous/next month; Enter: open date; Esc: cancel; Q: quit |
+- Click a calendar date, or press `Ctrl+Left` / `Ctrl+Right`, to change day.
+- Press `Ctrl+S` to save immediately. Changes also save automatically after a
+  short pause and whenever you change dates or close the app.
+- Press `F9` or use the menu button to collapse the calendar sidebar.
+- Use `Alt+Left` / `Alt+Right` to change the displayed calendar month.
+- Choose light, dark, or sepia from the theme selector.
+- Select text and use `Ctrl+B`, `Ctrl+I`, or `Ctrl+H` for bold, italic, or
+  highlight. `Ctrl+L` toggles bullets on the selected lines.
+- Choose a PNG illustration from the sidebar. It stays in the editor's
+  lower-right corner and the choice is remembered.
 
-The calendar marks dates containing text with `*`. An empty entry does not receive a mark. The currently selected date is highlighted. `Q` is a normal text character while editing; press Esc, then Q to quit.
+Formatting is stored as readable plain text (`**bold**`, `*italic*`,
+`==highlight==`, and `- ` list items), so no schema change or proprietary rich
+text format is needed.
 
-## Files
+## Categories and tags
 
-- `main.py`: opens SQLite and starts the curses screen.
-- `db.py`: creates the table, loads and saves entries, and finds marked dates.
-- `ui.py`: draws the journal and calendar, and handles navigation keys.
-- `editor.py`: keeps text and cursor state, independent of curses.
-- `calendar.py`: builds the month grid and handles month changes.
-- `ascii/`: the small illustration shown above each entry.
+Put a recognized command on its own line to start a journal block:
 
-The database keeps one row per date, with `id`, `date`, `content`, `favorite`, `created_at`, and `updated_at`. The `favorite` field is reserved for a later version.
+```text
+/memory
+/reflection
+/gratitude
+/todo
+/idea
+```
+
+Typing `/` opens a small autocomplete list; use Up/Down and Tab or Enter to
+accept a command. Subject tags such as `#career`, `#travel`, and `#books` remain
+part of the text. `categories.py` dynamically parses blocks and tags into a
+stable intermediate representation, ready for a later migration to `blocks`,
+`tags`, and `block_tags` tables.
+
+## Project structure
+
+- `main.py`: opens SQLite and starts Tkinter.
+- `ui.py`: Tkinter layout, themes, calendar controls, formatting, and keys.
+- `db.py`: parameterized database creation, loading, saving, and date marks.
+- `calendar.py`: Monday-first month grids and date math.
+- `categories.py`: UI-independent slash-block and subject-tag parsing.
+- `settings.py`: small JSON preference store.
+- `editor.py`: retained pure text-editor core from v0.1.
+
+The `entries` table keeps `id`, `date`, `content`, `favorite`, `created_at`, and
+`updated_at`. Editing an entry preserves its id, creation time, and favorite
+value.
 
 ## Checks
 
@@ -47,28 +83,6 @@ Run the standard-library tests with:
 python3 -m unittest discover -s tests
 ```
 
-The terminal UI should be tried in a Linux terminal or over SSH; Windows Python does not provide the Unix `curses` module.
-
-## Windows and Raspberry Pi workflow
-
-Keep the **code** in a private GitHub repository. On your Windows PC, commit and push code changes. Clone the repository once on the Pi, then run `git pull --ff-only` on the Pi whenever you want to update the app. Git commands need a network connection; the journal itself does not.
-
-The journal database lives outside this repository, in the Pi user's home directory. It is deliberately excluded by `.gitignore` if copied into the project. Do not commit personal entries. Back up the database separately, for example to a USB drive you control.
-
-For a new GitHub repository, create an **empty** private repository there first (without a README or license), then run these commands in this project directory after it has been initialized locally:
-
-```sh
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
-git push -u origin main
-```
-
-On the Pi, while online:
-
-```sh
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git ~/terminal-journal
-cd ~/terminal-journal
-python3 -m unittest discover -s tests
-python3 main.py
-```
-
-Later updates on the Pi take `git pull --ff-only` from inside `~/terminal-journal`. If you edit code on the Pi, commit and push those changes when online, then pull them on Windows before editing there again.
+Because the interface needs a graphical display, launch it from an XFCE session
+on the Pi for the final screen and keyboard check. The application itself does
+not require network access.
