@@ -10,7 +10,6 @@ DEFAULTS = {
     "theme": "dark",
     "fullscreen": True,
     "sidebar_open": True,
-    "illustration": "",
 }
 
 

@@ -1,7 +1,24 @@
 """Small, terminal-independent text editor for journal entries."""
 
+import re
+
 
 FORMAT_MARKERS = {"bold": "**", "italic": "*", "highlight": "=="}
+
+INLINE_PATTERNS = (
+    ("bold_italic", re.compile(r"\*{3}(\S(?:[^\n]*?\S)?)\*{3}"), 3),
+    (
+        "bold",
+        re.compile(r"(?<!\*)\*\*(?!\*)(\S(?:[^\n]*?\S)?)\*\*(?!\*)"),
+        2,
+    ),
+    ("highlight", re.compile(r"==(\S(?:[^\n]*?\S)?)=="), 2),
+    (
+        "italic",
+        re.compile(r"(?<!\*)\*(?!\*)(\S(?:[^\n]*?\S)?)\*(?!\*)"),
+        1,
+    ),
+)
 
 
 def formatted_text(text, style):
@@ -11,6 +28,22 @@ def formatted_text(text, style):
     except KeyError:
         raise ValueError("unknown formatting style: {}".format(style))
     return marker + text + marker
+
+
+def has_format_markers(text_before, text_after, style):
+    """Return whether a selection is immediately wrapped in ``style``."""
+    try:
+        marker = FORMAT_MARKERS[style]
+    except KeyError:
+        raise ValueError("unknown formatting style: {}".format(style))
+    if style in ("bold", "italic"):
+        left = len(text_before) - len(text_before.rstrip("*"))
+        right = len(text_after) - len(text_after.lstrip("*"))
+        wrapper_size = min(left, right)
+        if style == "bold":
+            return wrapper_size in (2, 3)
+        return wrapper_size in (1, 3)
+    return text_before.endswith(marker) and text_after.startswith(marker)
 
 
 def toggle_bullet_lines(lines):

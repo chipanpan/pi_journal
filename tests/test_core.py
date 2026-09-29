@@ -31,13 +31,43 @@ class DatabaseTests(unittest.TestCase):
                 db.save_entry(connection, day, "")
                 self.assertEqual(db.entry_days(connection, 2026, 9), set())
 
+                db.save_entry(connection, date(2026, 9, 18), "older")
+                db.save_entry(connection, day, "newer")
+                self.assertEqual(
+                    [row["date"] for row in db.all_entries(connection)],
+                    ["2026-09-19", "2026-09-18"],
+                )
+                self.assertEqual(db.block_types(connection)[:5], categories.DEFAULT_BLOCK_TYPES)
+                db.save_entry(connection, day, "/News\nA custom block")
+                self.assertIn("news", db.block_types(connection))
+
 
 class EditorTests(unittest.TestCase):
     def test_plain_text_formatting(self):
         self.assertEqual(editor.formatted_text("word", "bold"), "**word**")
+        self.assertTrue(editor.has_format_markers("***", "***", "bold"))
+        self.assertTrue(editor.has_format_markers("***", "***", "italic"))
+        self.assertFalse(editor.has_format_markers("**", "**", "italic"))
+        self.assertFalse(editor.has_format_markers("*", "*", "bold"))
         self.assertEqual(editor.toggle_bullet_lines([""]), ["- "])
         self.assertEqual(editor.toggle_bullet_lines(["one", "two"]), ["- one", "- two"])
         self.assertEqual(editor.toggle_bullet_lines(["- one", "- two"]), ["one", "two"])
+
+    def test_bold_markers_are_not_misread_as_italic(self):
+        matches = {
+            name: [match.span(1) for match in pattern.finditer("**word**")]
+            for name, pattern, _marker_size in editor.INLINE_PATTERNS
+        }
+        self.assertEqual(matches["bold"], [(2, 6)])
+        self.assertEqual(matches["italic"], [])
+
+        combined = {
+            name: [match.span(1) for match in pattern.finditer("***word***")]
+            for name, pattern, _marker_size in editor.INLINE_PATTERNS
+        }
+        self.assertEqual(combined["bold_italic"], [(3, 7)])
+        self.assertEqual(combined["bold"], [])
+        self.assertEqual(combined["italic"], [])
 
     def test_edit_and_wrap(self):
         editor = Editor("ab\ncd")
@@ -76,21 +106,47 @@ class CalendarTests(unittest.TestCase):
 
 
 class CategoryTests(unittest.TestCase):
-    def test_parses_blocks_and_tags_for_future_migration(self):
-        text = "A preface #Books\n/memory\nRead on the train #travel #books\n/todo\nPack"
+    def test_parses_dynamic_blocks_for_future_migration(self):
+        text = "A preface\n/memory\nRead on the train\n/news\nHeadlines\n/todo\nPack"
         blocks = categories.parse_blocks(text)
-        self.assertEqual([block.category for block in blocks], [None, "memory", "todo"])
-        self.assertEqual(blocks[1].content, "Read on the train #travel #books")
-        self.assertEqual(blocks[1].tags, ("travel", "books"))
-        self.assertEqual(blocks[0].tags, ("books",))
+        self.assertEqual(
+            [block.category for block in blocks], [None, "memory", "news", "todo"]
+        )
+        self.assertEqual(blocks[1].content, "Read on the train")
+        self.assertEqual(blocks[2].content, "Headlines")
+        self.assertEqual(categories.block_types_in_text(text), ("memory", "news", "todo"))
+        self.assertEqual(categories.block_types_in_text("/ne"), ())
+        self.assertEqual(categories.block_types_in_text("/news\n"), ("news",))
 
-    def test_only_recognized_command_lines_split_blocks(self):
+    def test_any_valid_command_line_splits_blocks(self):
         blocks = categories.parse_blocks("/memory lane\n/unknown\n/idea\nTry it")
-        self.assertEqual(len(blocks), 2)
+        self.assertEqual(len(blocks), 3)
         self.assertIsNone(blocks[0].category)
-        self.assertEqual(blocks[1].category, "idea")
-        self.assertEqual(categories.matching_commands("/gr"), ("/gratitude",))
+        self.assertEqual(blocks[1].category, "unknown")
+        self.assertEqual(blocks[2].category, "idea")
+        self.assertEqual(
+            categories.matching_commands("/n", ("memory", "news")), ("/news",)
+        )
         self.assertEqual(categories.matching_commands("memory"), ())
+
+    def test_autocomplete_token_is_anchored_to_the_cursor(self):
+        self.assertEqual(categories.autocomplete_token("/grat"), ("/grat", 0))
+        self.assertEqual(categories.autocomplete_token("  /grat"), ("/grat", 2))
+        self.assertIsNone(categories.autocomplete_token("note /grat"))
+        self.assertIsNone(categories.autocomplete_token("note/grat"))
+        self.assertIsNone(categories.autocomplete_token("/grat", "itude"))
+
+    def test_entries_are_filtered_by_block_type(self):
+        entries = (
+            ("2026-09-20", "/memory\nTrain ride\n/news\nDaily headlines"),
+            ("2026-09-19", "/news\nWeekly headlines\n/idea\nRead more"),
+        )
+        matches = categories.blocks_for_type(entries, "/news")
+        self.assertEqual([entry_date for entry_date, _block in matches], [
+            "2026-09-20", "2026-09-19"
+        ])
+        self.assertEqual(matches[0][1].category, "news")
+        self.assertEqual(matches[0][1].content, "Daily headlines")
 
 
 if __name__ == "__main__":

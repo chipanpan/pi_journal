@@ -4,6 +4,8 @@ import os
 import sqlite3
 from pathlib import Path
 
+import categories
+
 
 def default_path():
     """Follow XDG on Linux, with a sensible home-directory fallback."""
@@ -28,6 +30,31 @@ def open_database(path=None):
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS block_types (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.executemany(
+        "INSERT OR IGNORE INTO block_types (name) VALUES (?)",
+        ((name,) for name in categories.DEFAULT_BLOCK_TYPES),
+    )
+    existing_entries = connection.execute(
+        "SELECT content FROM entries WHERE content != ''"
+    ).fetchall()
+    discovered = {
+        block_type
+        for row in existing_entries
+        for block_type in categories.block_types_in_text(row["content"])
+    }
+    connection.executemany(
+        "INSERT OR IGNORE INTO block_types (name) VALUES (?)",
+        ((name,) for name in sorted(discovered)),
+    )
     connection.commit()
     return connection
 
@@ -49,6 +76,10 @@ def save_entry(connection, day, content):
         """,
         (day.isoformat(), content),
     )
+    connection.executemany(
+        "INSERT OR IGNORE INTO block_types (name) VALUES (?)",
+        ((name,) for name in categories.block_types_in_text(content)),
+    )
     connection.commit()
 
 
@@ -60,3 +91,16 @@ def entry_days(connection, year, month):
         (prefix + "%",),
     ).fetchall()
     return {int(row["date"][-2:]) for row in rows}
+
+
+def all_entries(connection):
+    """Return nonempty entries newest first for dynamic block filtering."""
+    return connection.execute(
+        "SELECT date, content FROM entries WHERE content != '' ORDER BY date DESC"
+    ).fetchall()
+
+
+def block_types(connection):
+    """Return registered block type names in creation order."""
+    rows = connection.execute("SELECT name FROM block_types ORDER BY id").fetchall()
+    return tuple(row["name"] for row in rows)

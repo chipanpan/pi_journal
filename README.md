@@ -28,24 +28,36 @@ kept beside it in `settings.json`.
 
 ## Using the journal
 
-- Click a calendar date, or press `Ctrl+Left` / `Ctrl+Right`, to change day.
+- Press `Ctrl+Left` / `Ctrl+Right` to change day and `Ctrl+Up` / `Ctrl+Down`
+  to move by one week.
+- Press `Alt+Left` / `Alt+Right` to move to the same date in the previous or
+  next month, or `Ctrl+T` to return to today.
 - Press `Ctrl+S` to save immediately. Changes also save automatically after a
   short pause and whenever you change dates or close the app.
-- Press `F9` or use the menu button to collapse the calendar sidebar.
-- Use `Alt+Left` / `Alt+Right` to change the displayed calendar month.
-- Choose light, dark, or sepia from the theme selector.
+- Press `F9` to collapse or restore the calendar sidebar.
+- Press `F7` to enter the Block types navigator, use Up/Down to move, and press
+  Enter to display the selected type. Escape returns to the daily entry.
+- Press `F6` to cycle through light, dark, and sepia themes.
+- Press `F11` to toggle fullscreen and `Ctrl+Q` to save and close the app.
 - Select text and use `Ctrl+B`, `Ctrl+I`, or `Ctrl+H` for bold, italic, or
   highlight. `Ctrl+L` toggles bullets on the selected lines.
-- Choose a PNG illustration from the sidebar. It stays in the editor's
-  lower-right corner and the choice is remembered.
+- Use the arrow keys, Page Up, and Page Down to move and scroll in the editor.
+
+All app controls are keyboard-driven. The calendar is an informational sidebar:
+days containing entries have a dot, the whole weekday header row is shaded, and
+only the currently open date number is highlighted.
+The text editor intentionally has no visible scrollbar; normal Tkinter keyboard
+scrolling remains available.
 
 Formatting is stored as readable plain text (`**bold**`, `*italic*`,
-`==highlight==`, and `- ` list items), so no schema change or proprietary rich
-text format is needed.
+`***bold italic***`, `==highlight==`, and `- ` list items), but the wrappers are
+hidden while editing and the content is rendered with its actual formatting.
+Pressing a formatting shortcut again removes that format. This avoids a schema
+change or proprietary rich-text format.
 
-## Categories and tags
+## Block types
 
-Put a recognized command on its own line to start a journal block:
+Put a slash command on its own line to start a journal block:
 
 ```text
 /memory
@@ -56,10 +68,21 @@ Put a recognized command on its own line to start a journal block:
 ```
 
 Typing `/` opens a small autocomplete list; use Up/Down and Tab or Enter to
-accept a command. Subject tags such as `#career`, `#travel`, and `#books` remain
-part of the text. `categories.py` dynamically parses blocks and tags into a
-stable intermediate representation, ready for a later migration to `blocks`,
-`tags`, and `block_tags` tables.
+accept a registered command. Block types are dynamic: typing a new valid type,
+such as `/news`, on its own line creates the block immediately. After
+save/autosave, that type is registered in SQLite, appears in the Block types
+explorer below the calendar, and is offered by future autocomplete sessions.
+Names may contain letters, numbers, underscores, and hyphens, but must begin
+with a letter.
+
+Select a block type with the mouse, or press F7 and use Up/Down followed by
+Enter. The selected type uses the same highlight style as the current calendar
+date. The editor then shows a read-only, newest-first list of every block of that
+type across all dates. Press Escape or navigate to another date to return to the
+daily entry. Hashtags such as `#outdoors` have no special meaning.
+
+`categories.py` dynamically parses blocks into a stable intermediate
+representation, ready for a later migration to structured `blocks` tables.
 
 ## Project structure
 
@@ -67,13 +90,14 @@ stable intermediate representation, ready for a later migration to `blocks`,
 - `ui.py`: Tkinter layout, themes, calendar controls, formatting, and keys.
 - `db.py`: parameterized database creation, loading, saving, and date marks.
 - `calendar.py`: Monday-first month grids and date math.
-- `categories.py`: UI-independent slash-block and subject-tag parsing.
+- `categories.py`: UI-independent dynamic slash-block parsing.
 - `settings.py`: small JSON preference store.
 - `editor.py`: retained pure text-editor core from v0.1.
 
 The `entries` table keeps `id`, `date`, `content`, `favorite`, `created_at`, and
 `updated_at`. Editing an entry preserves its id, creation time, and favorite
-value.
+value. The small `block_types` registry stores autocomplete/explorer names; the
+entry content and one-entry-per-date model remain unchanged.
 
 ## Checks
 

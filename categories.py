@@ -1,22 +1,18 @@
-"""Parse category blocks and subject tags from a daily journal entry.
+"""Parse dynamic slash-command blocks from a daily journal entry.
 
-Entries remain plain text in SQLite. This module is deliberately independent
-from Tkinter and the database so its output can later feed normalized block and
-tag tables without changing the editor.
+Entries remain plain text in SQLite. Block types are parsed independently from
+Tkinter and storage so they can later feed normalized block tables.
 """
 
 import re
 from dataclasses import dataclass
 
 
-CATEGORIES = ("memory", "reflection", "gratitude", "todo", "idea")
-CATEGORY_COMMANDS = tuple("/" + category for category in CATEGORIES)
-
-_COMMAND_RE = re.compile(
-    r"^\s*/(" + "|".join(re.escape(category) for category in CATEGORIES) + r")\s*$",
-    re.IGNORECASE,
+DEFAULT_BLOCK_TYPES = ("memory", "reflection", "gratitude", "todo", "idea")
+_COMMAND_RE = re.compile(r"^\s*/([A-Za-z][A-Za-z0-9_-]*)\s*$")
+_COMPLETED_COMMAND_RE = re.compile(
+    r"^[ \t]*/([A-Za-z][A-Za-z0-9_-]*)[ \t]*(?=\n)", re.MULTILINE
 )
-_TAG_RE = re.compile(r"(?<![\w#])#([A-Za-z][A-Za-z0-9_-]*)")
 
 
 @dataclass(frozen=True)
@@ -32,23 +28,10 @@ class JournalBlock:
     content: str
     start_line: int
     end_line: int
-    tags: tuple
-
-
-def subject_tags(text):
-    """Return unique, lower-case subject tags in first-seen order."""
-    seen = set()
-    result = []
-    for match in _TAG_RE.finditer(text):
-        tag = match.group(1).lower()
-        if tag not in seen:
-            seen.add(tag)
-            result.append(tag)
-    return tuple(result)
 
 
 def parse_blocks(text):
-    """Split plain entry text on recognized slash-command lines."""
+    """Split entry text on any valid slash-command line."""
     lines = text.splitlines()
     if not lines:
         return []
@@ -67,7 +50,6 @@ def parse_blocks(text):
                     content=content,
                     start_line=start_line,
                     end_line=end_line,
-                    tags=subject_tags(content),
                 )
             )
 
@@ -85,9 +67,53 @@ def parse_blocks(text):
     return blocks
 
 
-def matching_commands(prefix):
-    """Return autocomplete candidates for a slash-prefixed token."""
+def block_types_in_text(text):
+    """Return unique completed block types in first-seen order.
+
+    A type is registered only after its command line ends with Enter. This keeps
+    autosave from persisting a partially typed name such as ``/ne``.
+    """
+    seen = set()
+    result = []
+    for match in _COMPLETED_COMMAND_RE.finditer(text):
+        block_type = match.group(1).lower()
+        if block_type not in seen:
+            seen.add(block_type)
+            result.append(block_type)
+    return tuple(result)
+
+
+def matching_commands(prefix, block_types=None):
+    """Return autocomplete candidates from registered block types."""
     normalized = prefix.lower()
     if not normalized.startswith("/"):
         return ()
-    return tuple(command for command in CATEGORY_COMMANDS if command.startswith(normalized))
+    available = block_types if block_types is not None else DEFAULT_BLOCK_TYPES
+    commands = ("/" + block_type.lower().lstrip("/") for block_type in available)
+    return tuple(command for command in commands if command.startswith(normalized))
+
+
+def autocomplete_token(before_cursor, after_cursor=""):
+    """Return ``(token, start_offset)`` for a completable token at the cursor.
+
+    A block command occupies its own line, with optional leading whitespace.
+    Completion is suppressed for inline or mid-command cursors, preventing a
+    suggestion from replacing an unrelated slice of entry text.
+    """
+    if after_cursor[:1].isalnum() or after_cursor[:1] in ("_", "-"):
+        return None
+    match = re.match(r"^\s*(/[A-Za-z][A-Za-z0-9_-]*|/)$", before_cursor)
+    if match is None:
+        return None
+    return match.group(1), match.start(1)
+
+
+def blocks_for_type(entries, block_type):
+    """Return ``(date, block)`` pairs matching a dynamic block type."""
+    normalized = block_type.lstrip("/").lower()
+    return tuple(
+        (entry_date, block)
+        for entry_date, content in entries
+        for block in parse_blocks(content)
+        if block.category == normalized
+    )
